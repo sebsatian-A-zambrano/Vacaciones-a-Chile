@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Tião Te Español — aprenda espanhol básico para viajar pelo Chile. 40 aulas, 8 mundos, jogo educativo.">
+<meta name="theme-color" content="#12102a">
+<title>Tião Te Español — Aprenda espanhol para viajar pelo Chile</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 20'%3E%3Crect width='30' height='10' fill='%23fff'/%3E%3Crect y='10' width='30' height='10' fill='%23d52b1e'/%3E%3Crect width='10' height='10' fill='%230039a6'/%3E%3Cpath fill='%23fff' d='M5 1.7 5.74 3.98 8.14 3.98 6.2 5.39 6.94 7.67 5 6.26 3.06 7.67 3.8 5.39 1.86 3.98 4.26 3.98Z'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- =========================================================
+     Definições SVG compartilhadas: gradientes do Tião, clip da
+     cabeça e a bandeira do Chile. Ficam fora do avatar para que
+     a CÓPIA do Tião no quiz não duplique nenhum id="..." do
+     documento (HTML inválido + referências url(#...) ambíguas).
+     ========================================================= -->
+<svg class="svg-defs" aria-hidden="true" focusable="false" width="0" height="0">
+  <defs>
+    <radialGradient id="gSkin" cx="38%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#c08a5e"/>
+      <stop offset="100%" stop-color="#9c6440"/>
+    </radialGradient>
+    <linearGradient id="gHair" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3a2f28"/>
+      <stop offset="100%" stop-color="#141010"/>
+    </linearGradient>
+    <clipPath id="clipHead">
+      <ellipse cx="100" cy="96" rx="52" ry="58"/>
+    </clipPath>
+
+    <!-- Bandeira do Chile: duas faixas (branca em cima, vermelha embaixo)
+         e o cantão azul no canto superior esquerdo com a estrela branca.
+         Cantão oficial = 1/3 do comprimento × 1/2 da altura. -->
+    <symbol id="flag-cl" viewBox="0 0 30 20">
+      <rect width="30" height="10" fill="#ffffff"/>
+      <rect y="10" width="30" height="10" fill="#d52b1e"/>
+      <rect width="10" height="10" fill="#0039a6"/>
+      <path fill="#ffffff" d="M5 1.7 5.74 3.98 8.14 3.98 6.2 5.39 6.94 7.67 5 6.26 3.06 7.67 3.8 5.39 1.86 3.98 4.26 3.98Z"/>
+    </symbol>
+  </defs>
+</svg>
+
+<!-- decoração de fundo -->
+<div class="bg-decor" aria-hidden="true">
+  <span class="blob blob-1"></span>
+  <span class="blob blob-2"></span>
+  <span class="blob blob-3"></span>
+  <span class="stars"></span>
+</div>
+
+<!-- ======================= HUD ======================= -->
+<header class="hud">
+  <div class="hud-row">
+    <button class="hud-brand" id="btn-home" title="Voltar ao mapa">
+      <svg class="hud-flag" viewBox="0 0 30 20" aria-hidden="true"><use href="#flag-cl"/></svg>
+      <span class="hud-title"><b>Tião</b> te Español</span>
+    </button>
+
+    <div class="hud-stats">
+      <div class="stat" id="stat-xp" title="Pontos de experiência">
+        <span class="stat-ico">⚡</span><span id="xp-value">0</span><small>XP</small>
+      </div>
+      <div class="stat" id="stat-stars" title="Estrelas conquistadas">
+        <span class="stat-ico">★</span><span id="stars-value">0</span><small>/120</small>
+      </div>
+      <div class="stat stat-progress" title="Aulas concluídas">
+        <span class="stat-ico">📘</span><span id="lessons-value">0</span><small>/40</small>
+      </div>
+      <button class="hud-btn" id="btn-sound" title="Ligar/desligar som" aria-pressed="true">🔊</button>
+      <button class="hud-btn" id="btn-badges" title="Insígnias">🏅<span class="badge-count" id="badge-count">0</span></button>
+      <button class="hud-btn" id="btn-profile" title="Perfil e sincronização">👤</button>
+    </div>
+  </div>
+
+  <!-- barra de progresso global -->
+  <div class="global-progress" aria-hidden="true"><span id="global-progress-fill"></span></div>
+</header>
+
+<main id="app">
+
+  <!-- ======================= MAPA ======================= -->
+  <section class="screen" id="screen-map">
+    <div class="map-head">
+      <p class="map-greet" id="map-greet" hidden></p>
+      <h1>Escolha seu mundo</h1>
+      <p class="subtitle">40 aulas curtas para você se virar no Chile de verdade.</p>
+      <div class="word-day" id="word-day" hidden>
+        <div class="wd-flag">
+          <svg viewBox="0 0 30 20" aria-hidden="true"><use href="#flag-cl"/></svg>
+          <span>Palabra del día</span>
+        </div>
+        <div class="wd-body">
+          <p class="wd-pair">
+            <span class="wd-es" id="wd-es"></span>
+            <button class="speak" id="wd-speak" title="Ouvir em espanhol" aria-label="Ouvir em espanhol">🔊</button>
+          </p>
+          <p class="wd-pt" id="wd-pt"></p>
+          <p class="wd-from" id="wd-from"></p>
+        </div>
+      </div>
+
+      <button class="btn btn-hero" id="btn-continue">
+        <span id="continue-label">Começar a aula 1</span> <span id="continue-arrow">▶</span>
+      </button>
+    </div>
+    <div id="worlds-list" class="worlds-list"></div>
+    <p class="map-foot" id="map-foot">Dica: toque nas cartas de palavra para virar e ver a tradução.</p>
+  </section>
+
+  <!-- ======================= AULA ======================= -->
+  <section class="screen" id="screen-lesson">
+    <div class="lesson-head">
+      <button class="btn btn-ghost" id="btn-back-map">← Mapa</button>
+      <div class="lesson-chip" id="lesson-chip">Mundo 1</div>
+      <div class="lesson-stars" id="lesson-stars"></div>
+    </div>
+
+    <div class="tiao-stage">
+      <div class="tiao-wrap" id="tiao-wrap">
+        <!-- ===== AVATAR TIÃO (SVG inline, sem imagens externas) =====
+             gradientes e clip vêm do <defs> compartilhado no topo do <body> -->
+        <svg id="tiao" data-mood="normal" viewBox="0 0 200 220" role="img" aria-label="Tião, seu guia chileno">
+          <!-- cabelo: black power -->
+          <g class="hair">
+            <circle cx="42" cy="92" r="20"/>
+            <circle cx="58" cy="58" r="25"/>
+            <circle cx="84" cy="36" r="27"/>
+            <circle cx="116" cy="36" r="27"/>
+            <circle cx="142" cy="58" r="25"/>
+            <circle cx="158" cy="92" r="20"/>
+            <circle cx="100" cy="44" r="28"/>
+            <g class="hair-hi" clip-path="url(#clipHead)">
+              <ellipse cx="74" cy="34" rx="16" ry="10" transform="rotate(-22 74 34)"/>
+              <ellipse cx="126" cy="32" rx="12" ry="8" transform="rotate(18 126 32)"/>
+            </g>
+          </g>
+
+          <!-- pescoço (atrás do corpo) -->
+          <rect class="neck" x="88" y="138" width="24" height="48" rx="11"/>
+
+          <!-- corpo / camisa (cor por mundo via CSS) -->
+          <g class="body">
+            <path class="shirt" d="M100 176c-42 0-72 12-84 44h168c-12-32-42-44-84-44z"/>
+            <path class="shirt-shade" d="M100 176c-26 0-46 5-60 13l-8 31h136l-8-31c-14-8-34-13-60-13z" opacity=".22"/>
+            <path class="collar" d="M82 176l18 20 18-20-18-8z"/>
+          </g>
+
+          <!-- orelhas -->
+          <ellipse class="ear" cx="47" cy="100" rx="9" ry="14"/>
+          <ellipse class="ear" cx="153" cy="100" rx="9" ry="14"/>
+
+          <!-- cabeça -->
+          <ellipse class="head" cx="100" cy="96" rx="52" ry="58" fill="url(#gSkin)"/>
+
+          <!-- orelhas detalhe -->
+          <path class="ear-inner" d="M47 94c-4 3-4 9 0 12" />
+          <path class="ear-inner" d="M153 94c4 3 4 9 0 12" />
+
+          <!-- nariz -->
+          <path class="nose" d="M100 100c-3 7-4 11-1 13 2 1 4 1 6 0"/>
+
+          <!-- ===== OLHOS ===== -->
+          <g class="eyes">
+            <!-- normal -->
+            <g class="eye-set" data-set="normal">
+              <ellipse class="eye-white" cx="79" cy="92" rx="12" ry="13"/>
+              <ellipse class="eye-white" cx="121" cy="92" rx="12" ry="13"/>
+              <circle class="pupil" cx="80" cy="93" r="6"/>
+              <circle class="pupil" cx="122" cy="93" r="6"/>
+              <circle class="glint" cx="77.5" cy="90" r="2.2"/>
+              <circle class="glint" cx="119.5" cy="90" r="2.2"/>
+            </g>
+            <!-- happy -->
+            <g class="eye-set" data-set="happy">
+              <path class="eye-arc" d="M67 95q12-14 24 0"/>
+              <path class="eye-arc" d="M109 95q12-14 24 0"/>
+            </g>
+            <!-- sad -->
+            <g class="eye-set" data-set="sad">
+              <ellipse class="eye-white eye-white-sad" cx="79" cy="94" rx="11" ry="10"/>
+              <ellipse class="eye-white eye-white-sad" cx="121" cy="94" rx="11" ry="10"/>
+              <circle class="pupil pupil-sad" cx="80" cy="96" r="5.4"/>
+              <circle class="pupil pupil-sad" cx="122" cy="96" r="5.4"/>
+              <circle class="glint" cx="77.5" cy="93.5" r="2"/>
+              <circle class="glint" cx="119.5" cy="93.5" r="2"/>
+            </g>
+            <!-- surpreso -->
+            <g class="eye-set" data-set="surprised">
+              <ellipse class="eye-white eye-white-big" cx="79" cy="90" rx="14" ry="16"/>
+              <ellipse class="eye-white eye-white-big" cx="121" cy="90" rx="14" ry="16"/>
+              <circle class="pupil pupil-small" cx="79" cy="91" r="5"/>
+              <circle class="pupil pupil-small" cx="121" cy="91" r="5"/>
+              <circle class="glint" cx="76.5" cy="88" r="2"/>
+              <circle class="glint" cx="118.5" cy="88" r="2"/>
+            </g>
+          </g>
+
+          <!-- ===== SOBRANCELHAS ===== -->
+          <g class="brows">
+            <g class="brow-set" data-set="normal">
+              <path class="brow" d="M66 74q13-8 26-1"/>
+              <path class="brow" d="M134 74q-13-8-26-1"/>
+            </g>
+            <g class="brow-set" data-set="happy">
+              <path class="brow" d="M66 80q13-12 26-3"/>
+              <path class="brow" d="M134 80q-13-12-26-3"/>
+            </g>
+            <g class="brow-set" data-set="sad">
+              <path class="brow brow-sad" d="M66 68q13 12 26 2"/>
+              <path class="brow brow-sad" d="M134 68q-13 12-26 2"/>
+            </g>
+            <g class="brow-set" data-set="surprised">
+              <path class="brow" d="M66 66q13-6 26 1"/>
+              <path class="brow" d="M134 66q-13-6-26 1"/>
+            </g>
+          </g>
+
+          <!-- ===== BOCA ===== -->
+          <g class="mouths">
+            <g class="mouth-set" data-set="normal">
+              <path class="mouth-line" d="M86 126q14 11 28 0"/>
+            </g>
+            <g class="mouth-set" data-set="happy">
+              <path class="mouth-open" d="M76 122q24 34 48 0z"/>
+              <ellipse class="tongue" cx="100" cy="140" rx="12" ry="7"/>
+            </g>
+            <g class="mouth-set" data-set="sad">
+              <path class="mouth-line" d="M84 134q16-13 32 0"/>
+            </g>
+            <g class="mouth-set" data-set="surprised">
+              <ellipse class="mouth-o" cx="100" cy="130" rx="8.5" ry="11"/>
+            </g>
+          </g>
+
+          <!-- bochechas -->
+          <ellipse class="blush" cx="62" cy="116" rx="11" ry="7"/>
+          <ellipse class="blush" cx="138" cy="116" rx="11" ry="7"/>
+        </svg>
+      </div>
+
+      <div class="speech" id="lesson-speech">
+        <p class="speech-label">Dica do Tião</p>
+        <p class="speech-text" id="speech-text"></p>
+      </div>
+    </div>
+
+    <h2 class="lesson-title" id="lesson-title"></h2>
+
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-tab="vocab" role="tab">🃏 Palavras <span id="tab-vocab-count"></span></button>
+      <button class="tab" data-tab="phrases" role="tab">💬 Frases <span id="tab-phrases-count"></span></button>
+    </div>
+
+    <div class="cards-grid" id="cards-grid"></div>
+
+    <div class="lesson-actions">
+      <button class="btn btn-ghost" id="btn-revisit">🔁 Revisar</button>
+      <button class="btn btn-primary" id="btn-start-quiz">🎯 Desafio — 8 perguntas</button>
+    </div>
+  </section>
+
+  <!-- ======================= QUIZ ======================= -->
+  <section class="screen" id="screen-quiz">
+    <div class="quiz-head">
+      <button class="btn btn-ghost" id="btn-quit-quiz">← Sair</button>
+      <div class="quiz-progress">
+        <span id="quiz-counter">1/8</span>
+        <div class="quiz-bar"><span id="quiz-bar-fill"></span></div>
+      </div>
+      <div class="quiz-score">⚡ <span id="quiz-score">0</span></div>
+    </div>
+
+    <div class="combo" id="combo" hidden>🔥 <span id="combo-value">x2</span> <small id="combo-bonus"></small></div>
+
+    <div class="quiz-body">
+      <div class="quiz-tiao">
+        <div class="quiz-tiao-wrap"><span id="tiao-mini"></span></div>
+      </div>
+
+      <p class="quiz-hint" id="quiz-hint"></p>
+      <h2 class="quiz-prompt" id="quiz-prompt"></h2>
+      <p class="quiz-source" id="quiz-source"></p>
+      <div class="quiz-listen" id="quiz-listen" hidden>
+        <button class="speak" id="quiz-speak">🔊 Ouvir em espanhol</button>
+      </div>
+
+      <div class="options" id="options"></div>
+
+      <div class="feedback" id="feedback">
+        <p class="tiao-reaction" id="tiao-reaction"></p>
+        <p class="feedback-text" id="feedback-text"></p>
+        <p class="feedback-translation" id="feedback-translation"></p>
+        <button class="btn btn-primary" id="btn-next">Continuar</button>
+      </div>
+
+      <p class="key-hint">Atalhos: <kbd>1</kbd>–<kbd>4</kbd> respondem · <kbd>Enter</kbd> avança</p>
+    </div>
+  </section>
+
+  <!-- ======================= RESULTADO ======================= -->
+  <section class="screen" id="screen-result">
+    <div class="result-card">
+      <p class="result-kicker" id="result-kicker">Aula concluída!</p>
+      <h2 class="result-stars" id="result-stars"></h2>
+      <h2 class="result-title" id="result-title"></h2>
+      <p class="result-sub" id="result-sub"></p>
+
+      <div class="result-xp">
+        <span>⚡ <b id="result-xp">0</b> XP ganhos</span>
+        <span id="result-detail" class="result-detail"></span>
+      </div>
+
+      <div class="result-badges" id="result-badges"></div>
+      <p class="result-streak hidden" id="result-streak"></p>
+      <p class="result-nextbadge hidden" id="result-nextbadge"></p>
+
+      <div class="result-actions">
+        <button class="btn btn-ghost" id="btn-retry">🔁 Refazer</button>
+        <button class="btn btn-primary" id="btn-to-map">🗺️ Mapa</button>
+        <button class="btn btn-next hidden" id="btn-next-lesson">Próxima aula →</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ======================= MODAL INSÍGNIAS ======================= -->
+<div class="modal" id="modal-badges" role="dialog" aria-modal="true" aria-label="Insígnias">
+  <div class="modal-box">
+    <button class="modal-close" id="btn-close-modal" aria-label="Fechar">✕</button>
+    <h2>🏅 Minhas insígnias</h2>
+    <p class="modal-sub" id="badges-summary"></p>
+    <div class="badges-grid" id="badges-grid"></div>
+    <div class="modal-actions">
+      <button class="btn btn-danger-ghost" id="btn-reset">Recomeçar do zero</button>
+      <button class="btn btn-primary" id="btn-modal-close2">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= MODAL PERFIL / SINCRONIZAÇÃO ======================= -->
+<div class="modal" id="modal-profile" role="dialog" aria-modal="true" aria-label="Perfil e sincronização">
+  <div class="modal-box">
+    <button class="modal-close" id="btn-close-profile" aria-label="Fechar">✕</button>
+    <h2>👤 Perfil</h2>
+    <p class="modal-sub">Seu nome e o progresso sincronizado entre aparelhos.</p>
+
+    <label class="field">
+      <span>Seu nome</span>
+      <input type="text" id="input-name" maxlength="24" placeholder="Ex.: Sebas" autocomplete="nickname">
+    </label>
+
+    <hr class="sep">
+
+    <h3 class="sync-title">☁️ Sincronizar (GitHub)</h3>
+    <p class="sync-help">
+      Guarda seu progresso num <b>Gist secreto</b> da sua conta do GitHub, para você
+      continuar de outro celular ou computador. O token fica <b>só neste navegador</b>.
+    </p>
+
+    <!-- ainda não conectado -->
+    <div id="sync-off">
+      <a class="btn btn-ghost btn-token" id="link-token" target="_blank" rel="noopener noreferrer"
+         href="https://github.com/settings/tokens/new?scopes=gist&amp;description=Tiao%20Te%20Espanol">
+        1. Criar um token (permissão <code>gist</code>) ↗
+      </a>
+      <label class="field">
+        <span>2. Cole o token aqui</span>
+        <input type="password" id="input-token" placeholder="ghp_…  ou  github_pat_…" autocomplete="off" spellcheck="false">
+      </label>
+      <button class="btn btn-primary btn-block" id="btn-connect">Conectar e sincronizar</button>
+      <p class="sync-note" id="sync-off-note"></p>
+    </div>
+
+    <!-- já conectado -->
+    <div id="sync-on" hidden>
+      <p class="sync-status" id="sync-status"></p>
+      <div class="sync-actions">
+        <button class="btn btn-ghost" id="btn-pull">⬇️ Baixar do GitHub</button>
+        <button class="btn btn-primary" id="btn-push">⬆️ Enviar para o GitHub</button>
+      </div>
+      <label class="field field-inline">
+        <input type="checkbox" id="check-auto">
+        <span>Sincronizar sozinho ao abrir e ao terminar cada aula</span>
+      </label>
+      <button class="btn btn-danger-ghost btn-block" id="btn-disconnect">Desconectar deste aparelho</button>
+      <p class="sync-note">
+        🔒 O token fica guardado apenas neste navegador. Se emprestar o aparelho,
+        use <b>Desconectar</b> (isso apaga o token, mas <i>não</i> o seu progresso local).
+      </p>
+    </div>
+  </div>
+</div>
+
+<div id="confetti-layer" aria-hidden="true"></div>
+<div id="toast-layer" aria-hidden="true"></div>
+
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
