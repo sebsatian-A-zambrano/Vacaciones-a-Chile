@@ -62,8 +62,8 @@ MAPA → Classe desbloqueada → TIÃO APRESENTA (fala + dica chilena)
 - **Pronúncia:** botão 🔊 (Web Speech API) nas cartas de vocabulário/frase, no enunciado do quiz
   (quando está em espanhol) e na "palavra do dia". Voz preferida `es-CL` → `es-MX` → `es-419` → `es`.
 - **Progresso persistente:** `localStorage` (chave `tiao-espanol-v1`) — fecha e continua depois.
-  O **XP é derivado** (melhor tentativa de cada aula), o que permite **sincronizar entre aparelhos**
-  com um Gist secreto do GitHub (ver §3.4) e ainda guardar o **nome do jogador**.
+  O **XP é derivado** (melhor tentativa de cada aula), o que permite **passar o progresso entre
+  aparelhos** com um **código / link** (ver §3.4) e ainda guardar o **nome do jogador**.
 - **Sons:** bipes gerados com WebAudio (sem arquivos de áudio), com botão de ligar/desligar.
 
 ### 2.3.1 Detalhes "divertidos" acrescentados
@@ -75,7 +75,7 @@ MAPA → Classe desbloqueada → TIÃO APRESENTA (fala + dica chilena)
 | **Indicador de racha** | "🔥 x3 +10 XP" aparece no quiz a partir de 2 acertos seguidos, com confete e som próprio em x3+. |
 | **Pista da próxima insígnia** | No mapa e nos resultados: "Próxima insígnia: … — 3/5", calculada pelo progresso parcial mais alto. |
 | **Reações variadas** | Tião diz uma frase diferente a cada resposta (em vez de sempre a mesma). |
-| **Perfil do jogador** | Nome do jogador (saudação "¡Hola, …!") + sincronização entre aparelhos via GitHub Gist. Botão 👤 no HUD. |
+| **Perfil do jogador** | Nome do jogador (saudação "¡Hola, …!") + **código / link** para levar o progresso a outro aparelho. Botão 👤 no HUD. |
 
 ### 2.4 Geração automática do quiz
 
@@ -152,32 +152,33 @@ antiguos (v1, con un único `xp` global) se migran solos: el total viejo pasa a 
 | `renderResults()` | estrelas animadas, XP ganho, novas insígnias |
 | `showBadges()` | vitrine de insígnias |
 
-### 3.4 Sincronización entre aparelhos (GitHub Gist)
+### 3.4 Passar o progresso entre aparelhos (código / link)
 
-GitHub Pages es **hosting estático**: no hay servidor ni base de datos. Para que el progreso
-viaje de un celular a un computador, el juego usa un **Gist secreto de la propia cuenta de
-GitHub** del usuario, vía la API REST (`api.github.com`, que admite CORS desde el navegador).
+GitHub Pages es **hosting estático**: no hay servidor ni base de datos. Para continuar de otro
+celular o computador, el juego genera un **código de progreso** compacto (o un **link**) que el
+jugador lleva de un aparelho a outro. **No hay cuentas, no hay servidor, no hay internet**: el
+código es solo texto, y el jugador decide para dónde enviarlo.
 
 | Pieza | Detalle |
 |---|---|
-| Token | Personal Access Token con permiso **`gist`** (enlace directo en el modal) |
-| Dónde vive el token | `localStorage`, clave **`tiao-espanol-sync`**, **separada** del progreso |
-| Token en el Gist | **Nunca.** El payload solo lleva nombre, clases, insignias, sonido y `xpBase` |
-| Archivo en el Gist | `tiao-espanol-progresso.json` (Gist secreto, `public:false`) |
-| `syncConnect(token)` | valida con `GET /user` → busca Gist existente → si no hay, crea → combina |
-| `ghFindGist` | `GET /gists?per_page=100` y busca un gist con el archivo del juego |
-| `syncPull()` | lee el Gist, **fusiona** con lo local y guarda |
-| `syncPush()` | escribe el estado local en el Gist (`POST` para crear / `PATCH` para actualizar) |
-| `queueSync()` | envío diferido (1,2 s) tras cada clase, si la sincronización automática está activa |
-| `syncOnLoad()` | intenta combinar al abrir; si falla (offline), el juego sigue igual |
+| Formato del código | `TE2\|nombre\|xpBase\|insignias\|aulas`, todo en **base64url** (seguro para URLs) |
+| Por aula | `id.estrellas.errores.xpEnBase36` (corto y suficiente para fusionar) |
+| `encodeProgress(state)` | crea el código a partir del estado actual |
+| `decodeProgress(texto)` | valida, decodifica y migra (`migrateState`) |
+| `progressLink()` | link listo para enviar: `…/#p=CÓDIGO` |
+| `extractCode()` | acepta pegar tanto el código puro como el link completo |
+| Botón **📋 Copiar código** | copia el código al portapapeles (con respaldo `execCommand`) |
+| Botón **🔗 Copiar link** | copia un link que, al abrirse, ya carga el progreso |
+| **Importar** | pega el código → decodifica → **fusiona** con lo local → guarda |
+| `importFromLink()` | si la URL trae `#p=…` (al abrir o al cambiar el hash), fusiona sola |
 
 **Fusión (`mergeStates`)** — nunca se pierde progreso: por cada clase se toma la **mejor**
 (`max` estrellas, `max` xp, `min` errores), las insignias se unen (unión) y `xpBase` toma el
 máximo. El nombre se conserva si cualquiera de los lados lo tiene.
 
-**Seguridad:** el token queda solo en ese navegador; el botón *Desconectar* lo borra sin tocar
-el progreso local ni el Gist. Si el token caduca, la sincronización falla de forma silenciosa
-al abrir (el juego funciona offline) y el error se muestra al pulsar *Enviar* / *Baixar*.
+**Ejemplo de flujo:** en el PC, *Perfil → Copiar link*; el link se manda por WhatsApp/email; al
+abrirlo en el celular, el juego junta los dos progresos y avisa "Progresso carregado do link! 📥".
+El código de 40 clases ocupa ~630 caracteres (cabe en cualquier mensaje).
 
 ---
 
@@ -333,13 +334,13 @@ No hay instalación, no hay dependencias, funciona offline.
 2. *Settings → Pages → Source*: elija **Deploy from a branch** y la rama `main` (carpeta `/root`).
 3. Espere ~1 minuto: el juego queda en `https://<usuario>.github.io/<repo>/`.
 
-No hace falta nada más: es un sitio estático. La **sincronización** funciona igual en
-GitHub Pages (el navegador llama directamente a `api.github.com`, que permite CORS desde
-cualquier origen, también desde `github.io`).
+No hace falta nada más: es un sitio estático. El **código / link** de progreso funciona igual en
+GitHub Pages: es solo texto que el jugador copia y pega, sin servidores ni cuentas.
 
-> **El usuario debe hacer UNA cosa para sincronizar:** crear un token de GitHub con permiso
-> `gist` (el modal trae el enlace directo y explica el paso). Sin token, el juego sigue
-> funcionando con el progreso guardado solo en ese navegador.
+> **El jugador no necesita crear nada.** Para pasar el progreso a otro aparelho, abre el botón
+> 👤 (*Perfil*), toca **Copiar link** y se manda el link a sí mismo (WhatsApp, email…). Al abrirlo
+> en el otro aparelho, el progreso se junta solo. Sin link, el juego sigue con el progreso
+> guardado solo en ese navegador.
 
 ---
 
@@ -365,11 +366,13 @@ Todo lo anterior está implementado y probado en navegador real (Chromium):
 | Persistência após recarregar o navegador | OK (XP, aulas, estrelas, insígnias) |
 | Layout em 320 / 360 / 390 / 412 / 600 / 768 / 1024 / 1440 px | **0 px de overflow** (corrigido `minmax(400px,…)` no `.worlds-list`; e HUD compactado em ≤380 px com o 6.º botão) |
 | XP derivado + migração de save antigo (v1 → v2) | OK (xpBase preservado, sem `xp` solto) |
-| Fusão de dois "aparelhos" (`mergeStates`) | OK (melhor de cada aula, união de insignias) |
-| Fluxo GitHub Gist simulado (conectar → criar → pull → push) | OK; **o token nunca aparece no payload** |
-| Token inválido (401) | Mensagem clara, permanece desconectado |
+| Código de progresso: ida e volta (encode → decode) com nome acentuado e 40 aulas | OK (idêntico; código de ~630 caracteres, URL-seguro) |
+| Importar de outro aparelho (código distinto) | OK; **fusão** por melhor de cada aula, união de insígnias |
+| Abrir o jogo por link (`#p=…`) — recarga e `hashchange` | OK (junta o progresso e limpa o hash) |
+| Copiar código / link para o portapapeles | OK (conteúdo idêntico ao gerado) |
+| Código inválido | Mensagem clara; nada é alterado |
 | Persistência do nome + saudação no mapa | OK |
-| Console do navegador após toda a bateria de testes | 0 erros, 0 avisos (só os 401 esperados ao usar token falso) |
+| Console do navegador após toda a bateria de testes | 0 erros, 0 avisos |
 
 ---
 
@@ -385,9 +388,7 @@ Todo lo anterior está implementado y probado en navegador real (Chromium):
 - **Reações do Tião:** edite os arrays `REACCIONES_OK` / `REACCIONES_FAIL` em `js/app.js`
   (prefira os modismos que o próprio curso ensina).
 - **Resetar o progresso:** botão "Recomeçar do zero" no modal de insígnias.
-- **Sincronização (GitHub Gist):** toda a lógica vive no bloco `12.5` de `js/app.js`
-  (`ghFetch`/`syncConnect`/`syncPull`/`syncPush`/`mergeStates`). Para trocar de provedor
-  (Supabase, Firebase…), basta reescrever essas quatro funções mantendo o contrato:
-  `pull` devolve `{ name, lessons, badges, sound, xpBase }` e `push` recebe o mesmo objeto.
-  O token fica em `tiao-espanol-sync`, **separado** de `tiao-espanol-v1` (nunca exporte a
-  chave do token junto com o progresso).
+- **Progresso entre aparelhos (código / link):** toda a lógica vive no bloco `12.5` de `js/app.js`
+  (`encodeProgress` / `decodeProgress` / `progressLink` / `mergeStates` e a interface do modal).
+  Para acrescentar dados ao perfil, inclua-os no `encodeProgress` e no `decodeProgress` (é a única
+  fonte do formato). O **código nunca vai para servidor nenhum**: é texto que o jogador transporta.

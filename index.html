@@ -341,12 +341,12 @@
   </div>
 </div>
 
-<!-- ======================= MODAL PERFIL / SINCRONIZAÇÃO ======================= -->
-<div class="modal" id="modal-profile" role="dialog" aria-modal="true" aria-label="Perfil e sincronização">
+<!-- ======================= MODAL PERFIL / PROGRESSO ======================= -->
+<div class="modal" id="modal-profile" role="dialog" aria-modal="true" aria-label="Perfil e progresso">
   <div class="modal-box">
     <button class="modal-close" id="btn-close-profile" aria-label="Fechar">✕</button>
-    <h2>👤 Perfil</h2>
-    <p class="modal-sub">Seu nome e o progresso sincronizado entre aparelhos.</p>
+    <h2>👤 Perfil e progresso</h2>
+    <p class="modal-sub">Seu nome e como levar o progresso para outro aparelho.</p>
 
     <label class="field">
       <span>Seu nome</span>
@@ -355,43 +355,29 @@
 
     <hr class="sep">
 
-    <h3 class="sync-title">☁️ Sincronizar (GitHub)</h3>
+    <h3 class="sync-title">📤 Levar para outro aparelho</h3>
     <p class="sync-help">
-      Guarda seu progresso num <b>Gist secreto</b> da sua conta do GitHub, para você
-      continuar de outro celular ou computador. O token fica <b>só neste navegador</b>.
+      Toque em <b>Copiar código</b> e envie para você mesmo (WhatsApp, e-mail…).
+      No outro aparelho, cole o código na parte de baixo e toque em <b>Importar</b>.
     </p>
-
-    <!-- ainda não conectado -->
-    <div id="sync-off">
-      <a class="btn btn-ghost btn-token" id="link-token" target="_blank" rel="noopener noreferrer"
-         href="https://github.com/settings/tokens/new?scopes=gist&amp;description=Tiao%20Te%20Espanol">
-        1. Criar um token (permissão <code>gist</code>) ↗
-      </a>
-      <label class="field">
-        <span>2. Cole o token aqui</span>
-        <input type="password" id="input-token" placeholder="ghp_…  ou  github_pat_…" autocomplete="off" spellcheck="false">
-      </label>
-      <button class="btn btn-primary btn-block" id="btn-connect">Conectar e sincronizar</button>
-      <p class="sync-note" id="sync-off-note"></p>
+    <textarea class="code-area" id="code-out" readonly rows="3" spellcheck="false"></textarea>
+    <div class="sync-actions">
+      <button class="btn btn-primary" id="btn-copy-code">📋 Copiar código</button>
+      <button class="btn btn-ghost" id="btn-copy-link">🔗 Copiar link</button>
     </div>
 
-    <!-- já conectado -->
-    <div id="sync-on" hidden>
-      <p class="sync-status" id="sync-status"></p>
-      <div class="sync-actions">
-        <button class="btn btn-ghost" id="btn-pull">⬇️ Baixar do GitHub</button>
-        <button class="btn btn-primary" id="btn-push">⬆️ Enviar para o GitHub</button>
-      </div>
-      <label class="field field-inline">
-        <input type="checkbox" id="check-auto">
-        <span>Sincronizar sozinho ao abrir e ao terminar cada aula</span>
-      </label>
-      <button class="btn btn-danger-ghost btn-block" id="btn-disconnect">Desconectar deste aparelho</button>
-      <p class="sync-note">
-        🔒 O token fica guardado apenas neste navegador. Se emprestar o aparelho,
-        use <b>Desconectar</b> (isso apaga o token, mas <i>não</i> o seu progresso local).
-      </p>
-    </div>
+    <hr class="sep">
+
+    <h3 class="sync-title">📥 Receber de outro aparelho</h3>
+    <p class="sync-help">Cole aqui o código (ou o link) que você recebeu:</p>
+    <textarea class="code-area" id="code-in" rows="3" placeholder="Cole o código aqui…" spellcheck="false"></textarea>
+    <button class="btn btn-primary btn-block" id="btn-import">Importar progresso</button>
+    <p class="sync-note" id="code-status"></p>
+
+    <p class="sync-note">
+      🔒 Nada é enviado para a internet: o código contém só o seu progresso, e você decide
+      para onde mandá-lo. Ao importar, o jogo <b>junta</b> os dois progressos — nunca perde nada.
+    </p>
   </div>
 </div>
 

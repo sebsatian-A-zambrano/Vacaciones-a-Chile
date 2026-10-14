@@ -747,9 +747,6 @@ function renderResults() {
   };
   save();
 
-  /* sincroniza em segundo plano se o usuário ativou a sincronização automática */
-  queueSync();
-
   const newBadges = checkBadges();
 
   $('#result-kicker').textContent = errors === 0 ? 'Nota máxima!' : (errors <= 2 ? 'Muito bem!' : 'Aula concluída!');
@@ -810,110 +807,73 @@ function renderResults() {
   updateHUD(true);
 }
 
-/* ---------------- 12.5 Sincronização com GitHub Gist ----------------
-   O jogo é 100% estático (roda no GitHub Pages), então não existe servidor
-   nem banco de dados. Para levar o progresso de um aparelho a outro usamos um
-   "Gist" da conta do próprio usuário, acessado pela API do GitHub com um token
-   pessoal. O token NUNCA entra no arquivo de progresso e fica guardado só no
-   localStorage deste navegador (chave separada, nunca exportada). */
+/* ---------------- 12.5 Progresso entre aparelhos (código / link) ----------------
+   O jogo é 100% estático (roda no GitHub Pages): não existe servidor nem banco
+   de dados. Para continuar de outro celular/computador, o jogador gera um
+   "código de progresso" compacto (ou um link) e o leva para o outro aparelho.
+   Nada vai para a internet e não é preciso criar conta nenhuma. */
 
-const SYNC_KEY  = 'tiao-espanol-sync';
-const GIST_FILE = 'tiao-espanol-progresso.json';
-const GIST_DESC = 'Tião Te Español — progresso do jogo (não apague)';
-const GH_API    = 'https://api.github.com';
+const CODE_TAG = 'TE2';          /* etiqueta de versão do formato do código */
 
-const SYNC_DEFAULT = { token: '', gistId: '', login: '', lastSync: 0, auto: false };
-let sync = loadSync();
-let syncBusy = false;
-let syncTimer = null;
-
-function loadSync() {
-  try { return Object.assign({}, SYNC_DEFAULT, JSON.parse(localStorage.getItem(SYNC_KEY) || '{}')); }
-  catch (e) { return Object.assign({}, SYNC_DEFAULT); }
+/* --- base64url que entende acentos (UTF-8) --- */
+function b64encode(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
-function saveSync() {
-  try { localStorage.setItem(SYNC_KEY, JSON.stringify(sync)); } catch (e) { /* segue sem persistir */ }
+function b64decode(code) {
+  let s = String(code).replace(/-/g, '+').replace(/_/g, '/');
+  while (s.length % 4) s += '=';
+  const bin = atob(s);
+  const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
 }
-const syncOn = () => !!(sync.token && sync.gistId);
 
-/* --- chamada à API do GitHub com erro legível --- */
-async function ghFetch(path, token, opts = {}) {
-  const res = await fetch(GH_API + path, {
-    method: 'GET',
-    ...opts,
-    headers: {
-      'Accept': 'application/vnd.github+json',
-      'Authorization': 'Bearer ' + token,
-      'Content-Type': 'application/json',
-      ...(opts.headers || {})
+/* Gera o código: "TE2|nome|xpBase|insígnias|aulas", tudo em base64url.
+   Cada aula é "id.estrelas.erros.xpEmBase36" — curto e suficiente para fundir. */
+function encodeProgress(s) {
+  const lessons = Object.keys(s.lessons).sort((a, b) => a - b).map(id => {
+    const l = s.lessons[id];
+    return [id, l.stars || 0, l.errors || 0, (l.xp || 0).toString(36)].join('.');
+  }).join(';');
+  const raw = [
+    CODE_TAG,
+    encodeURIComponent(s.name || ''),
+    (s.xpBase || 0).toString(36),
+    (s.badges || []).join(','),
+    lessons
+  ].join('|');
+  return b64encode(raw);
+}
+
+/* Aceita tanto o código puro quanto um link colado (…/#p=CÓDIGO). */
+function extractCode(text) {
+  const m = String(text || '').match(/[#?&]p=([A-Za-z0-9\-_]+)/);
+  return (m ? m[1] : String(text || '')).trim();
+}
+
+function decodeProgress(text) {
+  const raw = b64decode(extractCode(text));
+  const p = raw.split('|');
+  if (p[0] !== CODE_TAG) throw new Error('Este código não é do Tião Te Español (ou é de uma versão diferente).');
+  const out = { v: 2, name: '', xpBase: 0, badges: [], lessons: {} };
+  try { out.name = decodeURIComponent(p[1] || ''); } catch (e) { out.name = p[1] || ''; }
+  out.xpBase = parseInt(p[2] || '0', 36) || 0;
+  out.badges = (p[3] || '').split(',').filter(Boolean);
+  if (p[4]) {
+    for (const entry of p[4].split(';')) {
+      const [id, st, er, xp] = entry.split('.');
+      if (!id) continue;
+      out.lessons[id] = { stars: +st || 0, errors: +er || 0, done: true, xp: parseInt(xp || '0', 36) || 0 };
     }
-  });
-  let data = null;
-  try { data = await res.json(); } catch (e) { /* sem corpo */ }
-  if (!res.ok) {
-    const err = new Error((data && data.message) || ('Erro HTTP ' + res.status));
-    err.status = res.status;
-    throw err;
   }
-  return data;
+  return migrateState(out);
 }
 
-/* valida o token de verdade e devolve o login do usuário */
-async function ghValidate(token) {
-  const u = await ghFetch('/user', token);
-  if (!u || !u.login) throw new Error('Resposta inesperada do GitHub.');
-  return u.login;
-}
-
-/* procura um Gist já criado por este app (até 3 páginas de 100) */
-async function ghFindGist(token) {
-  for (let page = 1; page <= 3; page++) {
-    const lista = await ghFetch('/gists?per_page=100&page=' + page, token);
-    if (!Array.isArray(lista) || !lista.length) break;
-    const achou = lista.find(g => g.files && g.files[GIST_FILE]);
-    if (achou) return achou.id;
-    if (lista.length < 100) break;
-  }
-  return null;
-}
-
-/* o que vai para o Gist (nunca inclui o token) */
-function syncPayload() {
-  return {
-    app: 'tiao-espanol',
-    v: 2,
-    updatedAt: Date.now(),
-    data: {
-      name: state.name || '',
-      lessons: state.lessons || {},
-      badges: state.badges || [],
-      sound: !!state.sound,
-      xpBase: Number(state.xpBase) || 0
-    }
-  };
-}
-
-async function ghWrite(gistId, payload) {
-  const body = JSON.stringify({
-    description: GIST_DESC,
-    public: false,
-    files: { [GIST_FILE]: { content: JSON.stringify(payload, null, 2) } }
-  });
-  return gistId
-    ? ghFetch('/gists/' + gistId, sync.token, { method: 'PATCH', body })
-    : ghFetch('/gists', sync.token, { method: 'POST', body });
-}
-
-async function ghRead(gistId) {
-  const g = await ghFetch('/gists/' + gistId, sync.token);
-  const file = g && g.files && g.files[GIST_FILE];
-  if (!file) throw new Error('O Gist não tem o arquivo de progresso do jogo.');
-  let content = file.content;
-  if (file.truncated && file.raw_url) {   /* progresso é pequeno, mas por via das dúvidas */
-    const r = await fetch(file.raw_url, { headers: { 'Accept': 'application/vnd.github.raw' } });
-    content = await r.text();
-  }
-  return JSON.parse(content);
+/* Link pronto para enviar: abre o jogo já com o progresso no "#p=". */
+function progressLink() {
+  return location.origin + location.pathname + '#p=' + encodeProgress(state);
 }
 
 /* Fusão: fica o MELHOR de cada aula nos dois lados — nada se perde. */
@@ -942,143 +902,94 @@ function mergeStates(a, b) {
   return out;
 }
 
-function applySyncedState(next) {
-  state = migrateState(next);
+function applyIncoming(incoming) {
+  const merged = mergeStates(state, incoming);
+  state = migrateState(merged);
   save();
   updateHUD();
   renderMap();
 }
 
-async function syncPull({ silent = false } = {}) {
-  if (!syncOn()) return false;
-  const remote = await ghRead(sync.gistId);
-  const remoteData = remote && remote.data;
-  if (!remoteData || typeof remoteData !== 'object') throw new Error('Progresso remoto vazio ou inválido.');
-
-  const before = JSON.stringify({ l: state.lessons, b: state.badges, x: state.xpBase, n: state.name });
-  const merged = mergeStates(state, remoteData);
-  const after = JSON.stringify({ l: merged.lessons, b: merged.badges, x: merged.xpBase, n: merged.name });
-
-  applySyncedState(merged);
-  sync.lastSync = Date.now();
-  saveSync();
-
-  if (!silent) toast(before !== after ? 'Progresso baixado e combinado! ☁️' : 'Nada novo para baixar ☁️', 1900);
-  return before !== after;
-}
-
-async function syncPush({ silent = false } = {}) {
-  if (!syncOn()) return;
-  const res = await ghWrite(sync.gistId, syncPayload());
-  if (res && res.id) sync.gistId = res.id;
-  sync.lastSync = Date.now();
-  saveSync();
-  if (!silent) toast('Progresso enviado para o GitHub ☁️', 1600);
-}
-
-/* conecta: valida o token, acha (ou cria) o Gist e já combina os dois lados */
-async function syncConnect(token) {
-  const login = await ghValidate(token);
-  sync.token = token;
-  sync.login = login;
-
-  const found = await ghFindGist(token);
-  if (!found) {
-    const created = await ghWrite('', syncPayload());
-    sync.gistId = created.id;
-    sync.auto = true;
-    sync.lastSync = Date.now();
-    saveSync();
-    return { created: true, login };
-  }
-  sync.gistId = found;
-  saveSync();
-  await syncPull({ silent: true });    /* combina o que já existir */
-  await syncPush({ silent: true });    /* devolve a união */
-  return { created: false, login };
-}
-
-/* envia em segundo plano depois de cada aula, com atraso para juntar eventos */
-function queueSync() {
-  if (!syncOn() || !sync.auto) return;
-  clearTimeout(syncTimer);
-  syncTimer = setTimeout(() => { syncPush({ silent: true }).catch(() => {}); }, 1200);
-}
-
-/* tenta combinar ao abrir o jogo */
-async function syncOnLoad() {
-  if (!syncOn() || !sync.auto) return;
-  try { await syncPull({ silent: true }); } catch (e) { /* offline: segue jogando */ }
-}
-
 /* --- interface do Perfil --- */
-function syncMsg(text, kind = '') {
-  const el = $('#sync-status');
-  if (!el) return;
-  el.className = 'sync-status' + (kind ? ' ' + kind : '');
-  el.textContent = text;
-}
-function syncOffNote(text, kind = '') {
-  const el = $('#sync-off-note');
+function codeStatus(text, kind = '') {
+  const el = $('#code-status');
   if (!el) return;
   el.textContent = text || '';
   el.className = 'sync-note' + (kind ? ' ' + kind : '');
 }
 
-function renderSyncUI() {
-  const connected = !!sync.token;
-  $('#sync-off').hidden = connected;
-  $('#sync-on').hidden = !connected;
-  $('#input-token').value = '';
+function renderProfile() {
   if ($('#input-name') !== document.activeElement) $('#input-name').value = state.name || '';
-
-  if (connected) {
-    const when = sync.lastSync ? new Date(sync.lastSync).toLocaleString('pt-BR') : 'nunca';
-    const el = $('#sync-status');
-    el.className = 'sync-status' + (sync.gistId ? '' : ' warn');
-    el.innerHTML = sync.gistId
-      ? `☁️ Sincronizado como <span class="u">@${esc(sync.login)}</span><small>Última vez: ${esc(when)}</small>`
-      : `Conectado como <span class="u">@${esc(sync.login)}</span>, mas sem Gist ainda — clique em “Enviar para o GitHub”.`;
-    $('#check-auto').checked = !!sync.auto;
-  }
+  const out = $('#code-out');
+  if (out && out !== document.activeElement) out.value = encodeProgress(state);
+  const inn = $('#code-in');
+  if (inn && inn !== document.activeElement) inn.value = '';
 }
 
-async function onConnect() {
-  const token = $('#input-token').value.trim();
-  if (!token) { syncOffNote('Cole o token primeiro.', 'err'); return; }
-  if (syncBusy) return;
-  syncBusy = true;
-  const btn = $('#btn-connect');
-  btn.disabled = true; btn.textContent = 'Conectando…';
-  syncOffNote('');
+async function copyText(text) {
   try {
-    const r = await syncConnect(token);
-    renderSyncUI();
-    sfx.badge();
-    toast(r.created ? 'Conectado! Progresso enviado ao GitHub ☁️'
-                    : 'Conectado! Progressos combinados ☁️', 2300);
+    await navigator.clipboard.writeText(text);
+    return true;
   } catch (e) {
-    sync.token = ''; sync.gistId = ''; sync.login = ''; saveSync();
-    renderSyncUI();
-    const msg = (e.status === 401 || e.status === 403)
-      ? 'Token inválido ou sem a permissão “gist”. Crie outro e tente de novo.'
-      : 'Não deu para conectar: ' + e.message;
-    syncOffNote(msg, 'err');
-  } finally {
-    syncBusy = false;
-    btn.disabled = false; btn.textContent = 'Conectar e sincronizar';
+    /* fallback para navegadores antigos ou sem permissão de clipboard */
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed'; ta.style.top = '-1000px'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e2) { ok = false; }
+    ta.remove();
+    return ok;
   }
 }
 
-async function runSync(fn, label) {
-  if (syncBusy) return;
-  syncBusy = true;
-  const push = $('#btn-push'), pull = $('#btn-pull');
-  push.disabled = pull.disabled = true;
-  syncMsg(label, 'busy');
-  try { await fn(); renderSyncUI(); }
-  catch (e) { syncMsg('Falhou: ' + e.message, 'err'); }
-  finally { push.disabled = pull.disabled = false; syncBusy = false; }
+async function onCopyCode() {
+  const ok = await copyText(encodeProgress(state));
+  codeStatus(ok ? 'Código copiado! Agora envie para você mesmo (WhatsApp, e-mail…). 📋'
+                : 'Não deu para copiar sozinho — toque no texto acima e copie à mão.',
+             ok ? '' : 'err');
+  if (ok) toast('Código copiado 📋', 1500);
+}
+
+async function onCopyLink() {
+  const ok = await copyText(progressLink());
+  codeStatus(ok ? 'Link copiado! Abra-o no outro aparelho para carregar o progresso. 🔗'
+                : 'Não deu para copiar sozinho — use o código acima.',
+             ok ? '' : 'err');
+  if (ok) toast('Link copiado 🔗', 1500);
+}
+
+function onImport() {
+  const raw = $('#code-in').value.trim();
+  if (!raw) { codeStatus('Cole um código primeiro.', 'err'); return; }
+  let incoming;
+  try {
+    incoming = decodeProgress(raw);
+  } catch (e) {
+    codeStatus(e.message || 'Código inválido.', 'err');
+    return;
+  }
+  const antes = totalXp() + completedCount() + state.badges.length;
+  applyIncoming(incoming);
+  const depois = totalXp() + completedCount() + state.badges.length;
+  renderProfile();
+  if (typeof sfx.badge === 'function') sfx.badge();
+  codeStatus(depois > antes
+    ? 'Progresso importado e somado ao seu! 🎉'
+    : 'Importado. O seu progresso já era igual ou melhor — nada foi perdido. 👌');
+  toast('Progresso importado 📥', 1800);
+}
+
+/* Se o jogo for aberto por um link com "#p=…", junta o progresso do link. */
+function importFromLink() {
+  const m = location.hash.match(/[#&?]p=([A-Za-z0-9\-_]+)/);
+  if (!m) return;
+  try {
+    applyIncoming(decodeProgress(m[1]));
+    toast('Progresso carregado do link! 📥', 2600);
+    history.replaceState(null, '', location.pathname + location.search);
+  } catch (e) { /* link inválido: ignora */ }
 }
 
 /* ---------------- 13. Eventos ---------------- */
@@ -1118,9 +1029,10 @@ function init() {
   $('#btn-modal-close2').addEventListener('click', closeModal);
   $('#modal-badges').addEventListener('click', e => { if (e.target.id === 'modal-badges') closeModal(); });
 
-  /* ---- Perfil / sincronização ---- */
+  /* ---- Perfil / progresso (código ou link) ---- */
   $('#btn-profile').addEventListener('click', () => {
-    renderSyncUI();
+    renderProfile();
+    codeStatus('');
     $('#modal-profile').classList.add('on');
     sfx.click();
   });
@@ -1133,29 +1045,13 @@ function init() {
     save();
     renderGreeting();
   });
-  $('#input-name').addEventListener('blur', () => { if (syncOn() && sync.auto) queueSync(); });
 
-  $('#btn-connect').addEventListener('click', onConnect);
-  $('#input-token').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); onConnect(); } });
-  $('#btn-push').addEventListener('click', () => runSync(() => syncPush(), 'Enviando…'));
-  $('#btn-pull').addEventListener('click', () => runSync(() => syncPull(), 'Baixando…'));
-  $('#check-auto').addEventListener('change', e => {
-    sync.auto = e.target.checked;
-    saveSync();
-    toast(sync.auto ? 'Sincronização automática ligada ☁️' : 'Sincronização automática desligada', 1600);
-  });
-  $('#btn-disconnect').addEventListener('click', () => {
-    if (!confirm('Desconectar deste aparelho? O token será apagado daqui. Seu progresso local NÃO será perdido nem apagado do GitHub.')) return;
-    sync = Object.assign({}, SYNC_DEFAULT);
-    saveSync();
-    renderSyncUI();
-    syncOffNote('');
-    toast('Desconectado. O progresso continua salvo neste navegador.', 2300);
-  });
+  $('#btn-copy-code').addEventListener('click', onCopyCode);
+  $('#btn-copy-link').addEventListener('click', onCopyLink);
+  $('#btn-import').addEventListener('click', onImport);
 
   $('#btn-reset').addEventListener('click', () => {
-    const extra = syncOn() ? '\n\nComo a sincronização está ligada, o progresso também será zerado no GitHub.' : '';
-    if (!confirm('Tem certeza? Todo o progresso (XP, estrelas e insígnias) será apagado.' + extra)) return;
+    if (!confirm('Tem certeza? Todo o progresso (XP, estrelas e insígnias) será apagado.')) return;
     const keepName = state.name;
     state = freshState();
     state.name = keepName;          /* o nome do jogador é preservado */
@@ -1165,7 +1061,6 @@ function init() {
     updateHUD();
     renderMap();
     toast('Progresso reiniciado. Bora de novo! ' + FLAG_HTML);
-    if (syncOn()) syncPush({ silent: true }).catch(() => {});
   });
 
   $('#btn-home').addEventListener('click', () => { sfx.click(); renderMap(); });
@@ -1219,8 +1114,9 @@ function init() {
 
   renderMap();
 
-  /* se a sincronização automática estiver ligada, combina com o GitHub ao abrir */
-  syncOnLoad();
+  /* se o jogo foi aberto por um link de progresso (#p=…), junta o que vem nele */
+  importFromLink();
+  window.addEventListener('hashchange', importFromLink);
 }
 
 document.addEventListener('DOMContentLoaded', init);

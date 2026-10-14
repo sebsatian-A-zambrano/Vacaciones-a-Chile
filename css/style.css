@@ -652,50 +652,37 @@ svg{ display:block; }
   .badge-count{ min-width:16px; height:16px; font-size:10px; top:-4px; right:-4px; }
 }
 
-/* ---------------- 15. Perfil / sincronização (GitHub Gist) ---------------- */
+/* ---------------- 15. Perfil / progresso (código / link) ---------------- */
 .map-greet{
   font-size:15px; font-weight:800; color:var(--accent);
   margin-bottom:6px;
 }
 .field{ display:block; text-align:left; margin-bottom:14px; }
 .field > span{ display:block; font-size:13px; font-weight:800; color:var(--muted); margin-bottom:6px; }
-.field input[type="text"],
-.field input[type="password"]{
+.field input[type="text"]{
   width:100%; padding:12px 14px; border-radius:12px;
   background:rgba(0,0,0,.28); border:1px solid var(--stroke); color:var(--text);
   font:inherit; font-size:15px;
 }
 .field input:focus{ border-color:var(--accent); outline:none; }
 .field input::placeholder{ color:rgba(185,178,216,.6); }
-.field-inline{
-  display:flex; align-items:flex-start; gap:10px; margin:16px 0;
-  font-size:13.5px; color:var(--muted); text-align:left;
-}
-.field-inline input{ margin-top:2px; width:17px; height:17px; accent-color:var(--accent); flex:none; }
-.field-inline span{ margin:0; font-weight:600; color:var(--muted); }
 .sep{ border:none; border-top:1px solid var(--stroke); margin:22px 0; }
 .sync-title{ font-size:17px; font-weight:900; margin-bottom:8px; }
 .sync-help{ font-size:13px; color:var(--muted); margin-bottom:16px; }
 .sync-help b{ color:var(--text); }
 .btn-block{ display:flex; width:100%; }
-.btn-token{ display:flex; width:100%; margin-bottom:16px; white-space:normal; text-align:center; }
-.btn-token code{
-  background:rgba(0,0,0,.35); padding:1px 6px; border-radius:6px;
-  font-size:12.5px; color:var(--accent);
+.code-area{
+  width:100%; resize:vertical; min-height:66px;
+  padding:10px 12px; border-radius:12px; margin-bottom:12px;
+  background:rgba(0,0,0,.28); border:1px solid var(--stroke); color:var(--text);
+  font:600 12.5px/1.45 ui-monospace,"Cascadia Code","Consolas","Courier New",monospace;
+  word-break:break-all;
 }
+.code-area:focus{ border-color:var(--accent); outline:none; }
+.code-area::placeholder{ color:rgba(185,178,216,.6); font-family:var(--font); }
 .sync-note{ font-size:12px; color:var(--muted); margin-top:14px; line-height:1.55; }
 .sync-note b{ color:var(--text); }
 .sync-note.err{ color:#ffb3ba; margin-top:12px; }
-.sync-status small{ display:block; font-size:12px; opacity:.85; margin-top:3px; }
-.sync-status{
-  font-size:14px; font-weight:800; padding:12px 14px; border-radius:12px;
-  background:rgba(49,217,124,.12); border:1px solid rgba(49,217,124,.4); color:#9af0c0;
-  margin-bottom:16px; word-break:break-word;
-}
-.sync-status.warn{ background:rgba(255,183,3,.12); border-color:rgba(255,183,3,.42); color:#ffd98a; }
-.sync-status.err{ background:rgba(255,93,108,.12); border-color:rgba(255,93,108,.42); color:#ffb3ba; }
-.sync-status.busy{ background:var(--surface); border-color:var(--stroke); color:var(--muted); }
-.sync-status .u{ color:var(--text); }
 .sync-actions{ display:flex; gap:10px; flex-wrap:wrap; }
 .sync-actions .btn{ flex:1 1 160px; }
 
