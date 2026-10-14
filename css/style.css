@@ -421,6 +421,20 @@ svg{ display:block; }
 @keyframes pop{ 50%{ transform:scale(1.045); } }
 @keyframes shake{ 0%,100%{transform:translateX(0);} 25%{transform:translateX(-7px);} 50%{transform:translateX(7px);} 75%{transform:translateX(-4px);} }
 
+/* ditado: ouvir e escrever em espanhol */
+.answer-write{ display:flex; flex-direction:column; gap:12px; }
+.write-input{
+  width:100%; padding:16px 18px; border-radius:var(--radius-sm);
+  background:var(--surface); border:2px solid var(--stroke); color:var(--text);
+  font:inherit; font-size:19px; font-weight:800; text-align:center; letter-spacing:.3px;
+  animation:optIn .35s backwards cubic-bezier(.2,.9,.3,1.2);
+}
+.write-input::placeholder{ color:rgba(185,178,216,.55); font-weight:600; font-size:14px; letter-spacing:0; }
+.write-input:focus{ border-color:var(--accent); outline:none; }
+.write-input.correct{ border-color:var(--ok); background:rgba(49,217,124,.2); animation:optIn .3s, pop .45s .1s; }
+.write-input.wrong{ border-color:var(--bad); background:rgba(255,93,108,.18); animation:shake .45s; }
+.write-input:disabled{ cursor:default; opacity:1; }
+
 .feedback{ margin-top:20px; display:none; text-align:center; animation:screenIn .3s; }
 .feedback.on{ display:block; }
 .feedback-text{ font-size:clamp(18px,4.5vw,24px); font-weight:900; margin-bottom:6px; }

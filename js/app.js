@@ -576,6 +576,40 @@ function buildQuiz(lesson) {
     });
   });
 
+  /* 1 pergunta de ESCUTA: ouvir a palavra e escolher a escrita correta */
+  const paraEscuta = canSpeak() ? pickN(lesson.vocab, 2) : [];
+  if (paraEscuta[0]) {
+    const it = paraEscuta[0];
+    const pool = lesson.vocab.filter(x => x.es !== it.es);
+    const distractors = pickN(pool, 3).map(d => d.es);
+    questions.push({
+      type: 'listen',
+      hint: 'Ouça e escolha a palavra',
+      prompt: '',
+      source: 'Escuta ➜ Espanhol',
+      answer: it.es,
+      audio: it.es,
+      promptLang: 'es',
+      say: `Você ouviu “${it.es}” (${it.pt}).`,
+      options: shuffle([it.es, ...distractors])
+    });
+  }
+
+  /* 1 pergunta de DITADO: ouvir e escrever em espanhol (acentos são perdoados) */
+  if (paraEscuta[1]) {
+    const it = paraEscuta[1];
+    questions.push({
+      type: 'write',
+      hint: 'Ouça e escreva em espanhol',
+      prompt: '',
+      source: 'Ditado ➜ Espanhol',
+      answer: it.es,
+      audio: it.es,
+      promptLang: 'es',
+      say: `Era “${it.es}” (${it.pt}).`
+    });
+  }
+
   return shuffle(questions);
 }
 
@@ -589,6 +623,8 @@ function startQuiz(id) {
     errors: 0,
     hitsVocab: 0,
     hitsPhrase: 0,
+    hitsListen: 0,
+    hitsWrite: 0,
     streak: 0,        /* acertos consecutivos */
     maxStreak: 0,
     comboXp: 0,       /* XP extra ganho por racha */
@@ -608,28 +644,58 @@ function renderQuestion() {
   const total = quiz.questions.length;
   quiz.locked = false;
 
+  const isListen = q.type === 'listen' || q.type === 'write';
+  const isWrite = q.type === 'write';
+
   $('#quiz-counter').textContent = `${quiz.index + 1}/${total}`;
   $('#quiz-bar-fill').style.width = `${(quiz.index / total) * 100}%`;
   $('#quiz-hint').textContent = q.hint;
-  $('#quiz-prompt').textContent = q.prompt;
   $('#quiz-source').textContent = q.source;
 
-  /* botão de ouvir: só quando o enunciado está em ESPANHOL e há voz */
+  /* enunciado: nas perguntas de escuta o texto fica escondido (é o que se ouve) */
+  const promptEl = $('#quiz-prompt');
+  promptEl.textContent = isListen ? '' : q.prompt;
+  promptEl.classList.toggle('hidden', isListen);
+
+  /* botão de ouvir: no quiz normal só quando o enunciado está em espanhol;
+     nas perguntas de escuta/ditado é a peça principal (dá para repetir à vontade) */
   const listen = $('#quiz-listen');
   const speakBtn = $('#quiz-speak');
-  const podeOuvir = canSpeak() && q.promptLang === 'es';
+  const podeOuvir = canSpeak() && (isListen || q.promptLang === 'es');
   listen.hidden = !podeOuvir;
-  if (podeOuvir) speakBtn.dataset.say = q.prompt;
+  if (podeOuvir) {
+    speakBtn.dataset.say = isListen ? q.audio : q.prompt;
+    speakBtn.textContent = isListen ? '🔊 Ouvir de novo' : '🔊 Ouvir em espanhol';
+  }
 
   const opts = $('#options');
-  opts.innerHTML = q.options.map((opt, i) =>
-    `<button class="option" data-i="${i}" data-opt="${esc(opt)}">
-       <span class="key">${i + 1}</span>${esc(opt)}
-     </button>`).join('');
+  const writeBox = $('#answer-write');
 
-  $$('.option', opts).forEach(btn => btn.addEventListener('click', () => answer(btn, Number(btn.dataset.i))));
+  if (isWrite) {
+    opts.innerHTML = '';
+    opts.hidden = true;
+    writeBox.hidden = false;
+    const inp = $('#write-input');
+    inp.value = '';
+    inp.disabled = false;
+    inp.classList.remove('correct', 'wrong', 'dimmed');
+    $('#btn-check-write').disabled = false;
+    setTimeout(() => inp.focus(), 250);
+  } else {
+    writeBox.hidden = true;
+    opts.hidden = false;
+    opts.innerHTML = q.options.map((opt, i) =>
+      `<button class="option" data-i="${i}" data-opt="${esc(opt)}">
+         <span class="key">${i + 1}</span>${esc(opt)}
+       </button>`).join('');
+    $$('.option', opts).forEach(btn => btn.addEventListener('click', () => answer(btn, Number(btn.dataset.i))));
+  }
+
   $('#feedback').classList.remove('on');
   setMood('normal', 0);
+
+  /* toca o áudio sozinho (o jogador clicou para começar, então há gesto do usuário) */
+  if (isListen && podeOuvir) setTimeout(() => speak(q.audio, speakBtn), 350);
 }
 
 /* ---------------- 11.1 Racha (combo) + XP flutuante ---------------- */
@@ -661,14 +727,43 @@ function floatXP(el, text, kind = 'ok') {
   setTimeout(() => s.remove(), 1300);
 }
 
+/* Normaliza para comparar: ignora maiúsculas, acentos e pontuação (acentos perdoados) */
+function normAns(s) {
+  return String(s == null ? '' : s)
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')   /* tira os acentos */
+    .replace(/[¿?¡!.,;:"'`´]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/* XP-base por tipo de pergunta */
+const BASE_XP = { vocab: 10, phrase: 15, listen: 15, write: 20 };
+
+/* múltipla escolha (vocab / frase / escuta) */
 function answer(btn, index) {
+  const q = quiz.questions[quiz.index];
+  judge(q.options[index], btn);
+}
+
+/* ditado: o jogador escreve o que ouviu */
+function answerWrite() {
+  if (quiz.locked) return;
+  const inp = $('#write-input');
+  const val = (inp.value || '').trim();
+  if (!val) { inp.focus(); return; }
+  judge(val, inp);
+}
+
+function judge(chosen, el) {
   if (quiz.locked) return;
   quiz.locked = true;
 
   const q = quiz.questions[quiz.index];
-  const chosen = q.options[index];
-  const ok = chosen === q.answer;
-  const baseXp = q.type === 'vocab' ? 10 : 15;
+  const isWrite = q.type === 'write';
+  /* na múltipla escolha a opção é exata; no ditado perdoamos acentos/maiúsculas */
+  const ok = isWrite ? (normAns(chosen) === normAns(q.answer)) : (chosen === q.answer);
+  const baseXp = BASE_XP[q.type] || 10;
   let xp = 0, comboBonus = 0;
 
   if (ok) {
@@ -679,29 +774,41 @@ function answer(btn, index) {
     xp = baseXp + comboBonus;
     quiz.score += xp;
     quiz.comboXp += comboBonus;
-    if (q.type === 'vocab') quiz.hitsVocab++; else quiz.hitsPhrase++;
-    btn.classList.add('correct');
+    if (q.type === 'vocab') quiz.hitsVocab++;
+    else if (q.type === 'phrase') quiz.hitsPhrase++;
+    else if (q.type === 'write') quiz.hitsWrite++;
+    else quiz.hitsListen++;
+    el.classList.add('correct');
     sfx.correct();
     setMood('happy');
     tiaoAnim('jump');
     showCombo(quiz.streak, comboBonus);
-    floatXP(btn, `+${xp}`, comboBonus ? 'combo' : 'ok');
+    floatXP(el, `+${xp}`, comboBonus ? 'combo' : 'ok');
     if (quiz.streak >= 3) { sfx.streak(); confetti(30); }
   } else {
     quiz.streak = 0;
     quiz.errors++;
-    btn.classList.add('wrong');
-    $$('.option').forEach(o => {
-      if (o.dataset.opt === q.answer) o.classList.add('correct');
-      else if (o !== btn) o.classList.add('dimmed');
-    });
+    el.classList.add('wrong');
+    if (!isWrite) {
+      $$('.option').forEach(o => {
+        if (o.dataset.opt === q.answer) o.classList.add('correct');
+        else if (o !== el) o.classList.add('dimmed');
+      });
+    }
     sfx.wrong();
     setMood('sad');
     tiaoAnim('shake');
     hideCombo();
-    floatXP(btn, pickRandom(['¡Uy!', 'Casi…', '¡Pucha!']), 'bad');
+    floatXP(el, pickRandom(['¡Uy!', 'Casi…', '¡Pucha!']), 'bad');
   }
-  $$('.option').forEach(o => o.classList.add('disabled'));
+
+  /* trava o campo (ditado) ou as opções (múltipla escolha) */
+  if (isWrite) {
+    $('#write-input').disabled = true;
+    $('#btn-check-write').disabled = true;
+  } else {
+    $$('.option').forEach(o => o.classList.add('disabled'));
+  }
 
   $('#quiz-score').textContent = quiz.score;
 
@@ -761,9 +868,13 @@ function renderResults() {
     .map(i => `<span class="st ${i < stars ? 'on' : ''}">★</span>`).join('');
 
   $('#result-xp').textContent = xpGain;
+  const partes = [];
+  if (quiz.hitsVocab)  partes.push(`${quiz.hitsVocab}×10 palavras`);
+  if (quiz.hitsPhrase) partes.push(`${quiz.hitsPhrase}×15 frases`);
+  if (quiz.hitsListen) partes.push(`${quiz.hitsListen}×15 escuta`);
+  if (quiz.hitsWrite)  partes.push(`${quiz.hitsWrite}×20 ditado`);
   $('#result-detail').textContent = isNew
-    ? `${quiz.hitsVocab}×10 palavras + ${quiz.hitsPhrase}×15 frases` +
-      (quiz.comboXp ? ` + ${quiz.comboXp} de racha` : '') + ` + ${bonus} bônus`
+    ? partes.join(' + ') + (quiz.comboXp ? ` + ${quiz.comboXp} de racha` : '') + ` + ${bonus} bônus`
     : (xpGain > 0
         ? `Novo recorde nesta aula! Subiu +${xpGain} XP (recorde: ${bestXp} XP).`
         : `Aula repetida — vale o seu recorde de ${bestXp} XP nesta aula (sem XP novo).`);
@@ -1083,6 +1194,10 @@ function init() {
   $('#btn-start-quiz').addEventListener('click', () => { sfx.click(); startQuiz(currentLessonId); });
 
   $('#btn-next').addEventListener('click', () => { sfx.click(); nextQuestion(); });
+  $('#btn-check-write').addEventListener('click', () => { sfx.click(); answerWrite(); });
+  $('#write-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); if (!quiz || !quiz.locked) answerWrite(); }
+  });
   $('#btn-quit-quiz').addEventListener('click', () => {
     if (!confirm('Sair do desafio? Seu progresso desta aula não será salvo.')) return;
     sfx.click();
